@@ -1,6 +1,9 @@
 package str
 
-import "strings"
+import (
+	"bytes"
+	"strings"
+)
 
 // Trim
 func Trim(str string) string {
@@ -9,15 +12,18 @@ func Trim(str string) string {
 
 // RemoveDuplicatedWhiteSpace
 func RemoveDuplicatedWhiteSpace(str string) string {
-	lines := strings.Split(str, "\n")
-	var results []string
-	for _, v := range lines {
-		line := Trim(v)
-		if line != "" {
-			results = append(results, line)
+	if len(str) <= 1{
+		return str
+	}
+	buffer := bytes.NewBufferString("")
+	s := []rune(str)
+	buffer.WriteRune(s[0])
+	for i:=1;i<len(s);i++{
+		if ! (s[i] == s[i-1] && s[i] == ' '){
+			buffer.WriteRune(s[i])
 		}
 	}
-	return strings.Join(results, "\n")
+	return buffer.String()
 }
 
 // StartWith

@@ -35,10 +35,10 @@ func TestRemoveDuplicatedWhiteSpace(t *testing.T) {
 		want string
 	}{
 		{"1", args{str: ""}, ""},
-		{"2", args{str: "abc   dd\n\n\nabc"}, "abc   dd\nabc"},
-		{"3", args{str: "\n\n\n\nabc\n\n\n\n"}, "abc"},
-		{"4", args{str: "  \n\n\n\nabc\n\n\n\n"}, "abc"},
-		{"5", args{str: "  \n\n\n\na\n\rbc\n\n\n\n"}, "a\nbc"},
+		{"4", args{str: " "}, " "},
+		{"4", args{str: "  "}, " "},
+		{"2", args{str: "abc   dd   abc abc"}, "abc dd abc abc"},
+		{"3", args{str: "    abc    "}, " abc "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
