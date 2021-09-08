@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	log "github.com/sirupsen/logrus"
 	"github.com/tenhan/tip/internal/handler"
+	"github.com/tenhan/tip/pkg/utils/str"
 	"golang.org/x/net/html/charset"
 	"net/http"
 	"strings"
@@ -14,6 +16,11 @@ type Jargon struct {
 }
 
 func (s Jargon) Handle(ctx context.Context, keyword string) (results []handler.Result, err error) {
+	// it is unnecessary to handle an alpha such as a, b, C
+	if len(keyword) == 1 || ! str.IsAlpha(keyword){
+		log.WithContext(ctx).Debugf("ignore keyword: %s",keyword)
+		return
+	}
 	link := "http://www.catb.org/~esr/jargon/html/go01.html"
 	res, err := http.Get(link)
 	if err != nil {
