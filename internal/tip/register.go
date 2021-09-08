@@ -1,4 +1,4 @@
-package configs
+package tip
 
 import (
 	"github.com/tenhan/tip/internal/handler"
