@@ -9,10 +9,15 @@ make install
 ```
 
 ## Usage
-```shell
-tip RTFM
 
-[1][Jargon]: RTFM
+### Translate
+```shell
+> tip RTFM
+[百度翻译]: RTFM
+RTFM
+网络 室温铁磁性; 去读该死的手册;
+
+[Jargon]: RTFM
 
 RTFM: /R·T·F·M/, imp.
  [Unix] Abbreviation for ‘Read The Fucking Manual’.
@@ -29,4 +34,5 @@ RTFM: /R·T·F·M/, imp.
    STFW, RTM, all of which
    mutated from RTFM, and compare UTSL.
 ```
+
 
