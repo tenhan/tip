@@ -70,13 +70,15 @@ func (c *Client) Run(ctx context.Context) (err error) {
 			valueCtx := context.WithValue(ctx,"name",sp.Name)
 			cancelCtx,cancel := context.WithCancel(valueCtx)
 			defer cancel()
+			log.WithContext(cancelCtx).Debug("Handle start")
 			r, err1 := sp.Handler.Handle(cancelCtx, keyword)
 			if err1 != nil {
-				log.WithContext(cancelCtx).Errorf("Handle fail, name: %s,err: %v",sp.Name,err1)
+				log.WithContext(cancelCtx).Errorf("Handle failed, err: %v", err1)
 			} else {
+				log.WithContext(cancelCtx).Debugf("Handle finished, result count: %d",len(r))
 				err2 := c.AppendResult(cancelCtx, sp.Name, r)
 				if err2 != nil {
-					log.WithContext(cancelCtx).Errorf("AppendResult fail, err: %v",err2)
+					log.WithContext(cancelCtx).Errorf("AppendResult failed, err: %v",err2)
 				}
 			}
 		}(s)
