@@ -79,6 +79,10 @@ func (s BaiduTranslate) Handle(ctx context.Context, keyword string) (results []h
 			title = strings.Replace(title, endWith, "", 1)
 			var lines []string
 			contentNode := selection.Find(".op_dict_content")
+			// if .op_dict_content not found, find .op_sp_fanyi
+			if contentNode.Children().Size() == 0 {
+				contentNode = selection.Find(".op_sp_fanyi")
+			}
 			contentNode.Children().Each(func(i int, s1 *goquery.Selection) {
 				line := s1.Text()
 				line = strings.Replace(line, "\n", " ", -1)
