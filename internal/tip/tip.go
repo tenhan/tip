@@ -2,6 +2,7 @@ package tip
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 
@@ -46,6 +48,7 @@ func (df *DefaultFieldsHook) Levels() []log.Level {
 
 // Run
 func (c *Client) Run(ctx context.Context) (err error) {
+	startAt := time.Now()
 	var verbose = flag.Bool("v", false, "show debug log")
 	flag.Parse()
 	log.SetFormatter(&log.TextFormatter{})
@@ -84,9 +87,43 @@ func (c *Client) Run(ctx context.Context) (err error) {
 		}(s)
 	}
 	group.Wait()
-	return
+	endAt := time.Now()
+	// save to history file
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal( err )
+	}
+	filename := fmt.Sprintf("%s/.tip_history",dirname)
+	fd,err :=os.OpenFile(filename,os.O_RDWR|os.O_CREATE|os.O_APPEND,0644)
+	if err != nil {
+		log.WithContext(ctx).Errorf("can not open history file %s, err: %s",filename,err)
+		return
+	}
+
+	history := handler.HistoryObject{
+		Keyword:  keyword,
+		Results:  c.GetResult(),
+		StartAt:  startAt,
+		EndAt:    endAt,
+		Duration: endAt.Sub(startAt).Milliseconds(),
+	}
+	historyJson,err := json.Marshal(&history)
+	if err != nil {
+		log.WithContext(ctx).Errorf("json.Marshal history fail: %s",err)
+		return
+	}
+	historyJson = append(historyJson,'\n')
+	_,err = fd.Write(historyJson)
+	if err != nil {
+		log.WithContext(ctx).Errorf("write buff to history file fail: %s",filename)
+		return
+	}
+	return fd.Close()
 }
 
+func (c *Client) GetResult() []handler.Result  {
+	return c.resultList
+}
 // AppendResult
 func (c *Client) AppendResult(ctx context.Context, name string, results []handler.Result) (err error) {
 	c.resultLock.Lock()
