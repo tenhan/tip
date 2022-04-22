@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -55,6 +56,7 @@ func (s BaiduTranslate) Handle(ctx context.Context, keyword string) (results []h
 		return
 	}
 	defer response.Body.Close()
+	log.WithContext(ctx).Debugf("response status: %s", response.Status)
 
 	// save cookies
 	responseCookies := jar.Cookies(cookieURL)
@@ -63,7 +65,12 @@ func (s BaiduTranslate) Handle(ctx context.Context, keyword string) (results []h
 	if err != nil {
 		return
 	}
-	doc, err := goquery.NewDocumentFromReader(response.Body)
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return
+	}
+	log.WithContext(ctx).Debugf("response body: %s", string(body))
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 	if err != nil {
 		return
 	}

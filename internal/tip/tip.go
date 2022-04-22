@@ -5,17 +5,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/fatih/color"
-	log "github.com/sirupsen/logrus"
-	"github.com/tenhan/tip/configs"
-	"github.com/tenhan/tip/internal/handler"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fatih/color"
+	log "github.com/sirupsen/logrus"
+	"github.com/tenhan/tip/configs"
+	"github.com/tenhan/tip/internal/handler"
 )
-
-
 
 type Client struct {
 	handlerWrapperList []handler.Wrapper
@@ -35,7 +34,7 @@ func (c *Client) SetSpiderWrapper(wrappers []handler.Wrapper) (err error) {
 	return
 }
 
-type DefaultFieldsHook struct {}
+type DefaultFieldsHook struct{}
 
 func (df *DefaultFieldsHook) Fire(entry *log.Entry) error {
 	entry.Data["handler"] = entry.Context.Value("name")
@@ -50,38 +49,41 @@ func (df *DefaultFieldsHook) Levels() []log.Level {
 func (c *Client) Run(ctx context.Context) (err error) {
 	startAt := time.Now()
 	var verbose = flag.Bool("v", false, "show debug log")
+	var veryVerbose = flag.Bool("vv", false, "show trace log")
 	flag.Parse()
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetOutput(os.Stdout)
 	log.AddHook(&DefaultFieldsHook{})
-	if *verbose{
+	if *veryVerbose {
+		log.SetLevel(log.TraceLevel)
+	} else if *verbose {
 		log.SetLevel(log.DebugLevel)
-	}else{
+	} else {
 		log.SetLevel(log.WarnLevel)
 	}
-	keyword := strings.Join(flag.Args()," ")
+	keyword := strings.Join(flag.Args(), " ")
 	if c.handlerWrapperList == nil || len(c.handlerWrapperList) == 0 {
 		err = fmt.Errorf("no spider found")
 		return
 	}
-	log.WithContext(ctx).Debugf("client start, keyword: %s",keyword)
+	log.WithContext(ctx).Debugf("client start, keyword: %s", keyword)
 	group := sync.WaitGroup{}
 	group.Add(len(c.handlerWrapperList))
 	for _, s := range c.handlerWrapperList {
 		go func(sp handler.Wrapper) {
 			defer group.Done()
-			valueCtx := context.WithValue(ctx,"name",sp.Name)
-			cancelCtx,cancel := context.WithCancel(valueCtx)
+			valueCtx := context.WithValue(ctx, "name", sp.Name)
+			cancelCtx, cancel := context.WithCancel(valueCtx)
 			defer cancel()
 			log.WithContext(cancelCtx).Debug("Handle start")
 			r, err1 := sp.Handler.Handle(cancelCtx, keyword)
 			if err1 != nil {
 				log.WithContext(cancelCtx).Errorf("Handle failed, err: %v", err1)
 			} else {
-				log.WithContext(cancelCtx).Debugf("Handle finished, result count: %d",len(r))
+				log.WithContext(cancelCtx).Debugf("Handle finished, result count: %d", len(r))
 				err2 := c.AppendResult(cancelCtx, sp.Name, r)
 				if err2 != nil {
-					log.WithContext(cancelCtx).Errorf("AppendResult failed, err: %v",err2)
+					log.WithContext(cancelCtx).Errorf("AppendResult failed, err: %v", err2)
 				}
 			}
 		}(s)
@@ -91,12 +93,12 @@ func (c *Client) Run(ctx context.Context) (err error) {
 	// save to history file
 	dirname, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal( err )
+		log.Fatal(err)
 	}
-	filename := fmt.Sprintf("%s/.tip_history",dirname)
-	fd,err :=os.OpenFile(filename,os.O_RDWR|os.O_CREATE|os.O_APPEND,0644)
+	filename := fmt.Sprintf("%s/.tip_history", dirname)
+	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		log.WithContext(ctx).Errorf("can not open history file %s, err: %s",filename,err)
+		log.WithContext(ctx).Errorf("can not open history file %s, err: %s", filename, err)
 		return
 	}
 
@@ -107,23 +109,24 @@ func (c *Client) Run(ctx context.Context) (err error) {
 		EndAt:    endAt,
 		Duration: endAt.Sub(startAt).Milliseconds(),
 	}
-	historyJson,err := json.Marshal(&history)
+	historyJson, err := json.Marshal(&history)
 	if err != nil {
-		log.WithContext(ctx).Errorf("json.Marshal history fail: %s",err)
+		log.WithContext(ctx).Errorf("json.Marshal history fail: %s", err)
 		return
 	}
-	historyJson = append(historyJson,'\n')
-	_,err = fd.Write(historyJson)
+	historyJson = append(historyJson, '\n')
+	_, err = fd.Write(historyJson)
 	if err != nil {
-		log.WithContext(ctx).Errorf("write buff to history file fail: %s",filename)
+		log.WithContext(ctx).Errorf("write buff to history file fail: %s", filename)
 		return
 	}
 	return fd.Close()
 }
 
-func (c *Client) GetResult() []handler.Result  {
+func (c *Client) GetResult() []handler.Result {
 	return c.resultList
 }
+
 // AppendResult
 func (c *Client) AppendResult(ctx context.Context, name string, results []handler.Result) (err error) {
 	c.resultLock.Lock()
@@ -131,7 +134,7 @@ func (c *Client) AppendResult(ctx context.Context, name string, results []handle
 	c.resultList = append(c.resultList, results...)
 	defer c.resultLock.Unlock()
 	prefix := ""
-	if num > 0{
+	if num > 0 {
 		prefix = "\n"
 	}
 	for _, v := range results {
