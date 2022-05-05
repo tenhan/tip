@@ -21,13 +21,11 @@ import (
 type BaiduTranslate struct{}
 
 func (s BaiduTranslate) Handle(ctx context.Context, keyword string) (results []handler.Result, err error) {
-	// Is keyword an English word?
-	if !str.IsAlpha(keyword) {
+	if !str.IsEnglish(keyword) {
 		log.WithContext(ctx).Debugf("ignore keyword: %s", keyword)
 		return
 	}
-	link := fmt.Sprintf("http://www.baidu.com/s?wd=%s", keyword)
-
+	link := fmt.Sprintf("http://www.baidu.com/s?wd=%s", url.QueryEscape(keyword))
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return
