@@ -33,6 +33,12 @@ RTFM: /R·T·F·M/, imp.
    RTFB, RTFS,
    STFW, RTM, all of which
    mutated from RTFM, and compare UTSL.
+
+> t by no means
+[百度翻译]: by no means
+by no means 英 [baɪ nəʊ miːnz] 美 [baɪ noʊ miːnz]
+[词典] 决不;丝毫不;一点儿也不;
+
 ```
 
 
