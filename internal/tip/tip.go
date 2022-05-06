@@ -1,10 +1,12 @@
 package tip
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -47,9 +49,9 @@ func (df *DefaultFieldsHook) Levels() []log.Level {
 
 // Run
 func (c *Client) Run(ctx context.Context) (err error) {
-	startAt := time.Now()
 	var verbose = flag.Bool("v", false, "show debug log")
 	var veryVerbose = flag.Bool("vv", false, "show trace log")
+	var showHistory = flag.Bool("l", false, "show history")
 	flag.Parse()
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetOutput(os.Stdout)
@@ -60,6 +62,9 @@ func (c *Client) Run(ctx context.Context) (err error) {
 		log.SetLevel(log.DebugLevel)
 	} else {
 		log.SetLevel(log.WarnLevel)
+	}
+	if *showHistory {
+		return c.ShowHistory(ctx)
 	}
 	keyword := strings.Join(flag.Args(), " ")
 	if c.handlerWrapperList == nil || len(c.handlerWrapperList) == 0 {
@@ -72,6 +77,7 @@ func (c *Client) Run(ctx context.Context) (err error) {
 	for _, s := range c.handlerWrapperList {
 		go func(sp handler.Wrapper) {
 			defer group.Done()
+			startAt := time.Now()
 			valueCtx := context.WithValue(ctx, "name", sp.Name)
 			cancelCtx, cancel := context.WithCancel(valueCtx)
 			defer cancel()
@@ -80,66 +86,68 @@ func (c *Client) Run(ctx context.Context) (err error) {
 			if err1 != nil {
 				log.WithContext(cancelCtx).Errorf("Handle failed, err: %v", err1)
 			} else {
+				endAt := time.Now()
+				result := &handler.HandlerResult{
+					Name:     sp.Name,
+					Keyword:  keyword,
+					Results:  r,
+					StartAt:  startAt,
+					EndAt:    endAt,
+					Duration: endAt.Sub(startAt).Milliseconds(),
+				}
+				if err := c.AddHistory(ctx, result); err != nil {
+					log.WithContext(ctx).Errorf("save history failed: %v, result: %v", err, result)
+				}
 				log.WithContext(cancelCtx).Debugf("Handle finished, result count: %d", len(r))
-				err2 := c.AppendResult(cancelCtx, sp.Name, r)
-				if err2 != nil {
-					log.WithContext(cancelCtx).Errorf("AppendResult failed, err: %v", err2)
+				if err := c.AppendResult(cancelCtx, result); err != nil {
+					log.WithContext(cancelCtx).Errorf("AppendResult failed: %v", err)
 				}
 			}
 		}(s)
 	}
 	group.Wait()
-	endAt := time.Now()
+	return nil
+}
+
+func (c *Client) GetResultList() []handler.Result {
+	return c.resultList
+}
+
+func (c *Client) AddHistory(ctx context.Context, result *handler.HandlerResult) error {
 	// save to history file
-	dirname, err := os.UserHomeDir()
+	filename, err := c.GetHistoryFilename()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	filename := fmt.Sprintf("%s/.tip_history", dirname)
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		log.WithContext(ctx).Errorf("can not open history file %s, err: %s", filename, err)
-		return
+		return err
 	}
-
-	history := handler.HistoryObject{
-		Keyword:  keyword,
-		Results:  c.GetResult(),
-		StartAt:  startAt,
-		EndAt:    endAt,
-		Duration: endAt.Sub(startAt).Milliseconds(),
-	}
-	historyJson, err := json.Marshal(&history)
+	resultJson, err := json.Marshal(&result)
 	if err != nil {
-		log.WithContext(ctx).Errorf("json.Marshal history fail: %s", err)
-		return
+		return err
 	}
-	historyJson = append(historyJson, '\n')
-	_, err = fd.Write(historyJson)
+	resultJson = append(resultJson, '\n')
+	_, err = fd.Write(resultJson)
 	if err != nil {
-		log.WithContext(ctx).Errorf("write buff to history file fail: %s", filename)
-		return
+		return err
 	}
 	return fd.Close()
 }
 
-func (c *Client) GetResult() []handler.Result {
-	return c.resultList
-}
-
 // AppendResult
-func (c *Client) AppendResult(ctx context.Context, name string, results []handler.Result) (err error) {
+func (c *Client) AppendResult(ctx context.Context, result *handler.HandlerResult) (err error) {
 	c.resultLock.Lock()
 	num := len(c.resultList)
-	c.resultList = append(c.resultList, results...)
+	c.resultList = append(c.resultList, result.Results...)
 	defer c.resultLock.Unlock()
 	prefix := ""
 	if num > 0 {
 		prefix = "\n"
 	}
-	for _, v := range results {
+	for k, v := range result.Results {
 		co := color.New(color.FgGreen)
-		_, err = co.Printf("%s[%s]: %s\n", prefix, name, v.Title)
+		_, err = co.Printf("%s[%d][%s][%s]: %s\n", prefix, num+1+k, result.StartAt.Format(time.RFC3339), result.Name, v.Title)
 		if err != nil {
 			return
 		}
@@ -160,4 +168,45 @@ func (c *Client) ShowHelpInfo() {
 	for i, s := range GetHandlerWrapperList() {
 		fmt.Printf("[%d]%s: %s\n", i+1, s.Name, s.Description)
 	}
+}
+
+func (c *Client) GetHistoryFilename() (string, error) {
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/.tip_history", dir), nil
+}
+
+func (c *Client) ShowHistory(ctx context.Context) error {
+	filename, err := c.GetHistoryFilename()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil
+	}
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	r := bufio.NewReader(file)
+	obj := &handler.HandlerResult{}
+	for {
+		line, _, err := r.ReadLine()
+		if err == io.EOF {
+			break
+		}
+		err = json.Unmarshal(line, obj)
+		if err != nil {
+			return err
+		}
+		err = c.AppendResult(ctx, obj)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
